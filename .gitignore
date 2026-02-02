@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+
+dataset/
+checkpoints/
+logs/
+results/
+test_results/
+imgs/
+imgs_testset/
+result.txt
+wandb/

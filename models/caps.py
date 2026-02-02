@@ -87,13 +87,14 @@ class CAPSAttention(nn.Module):
 
     def __init__(self, d_model: int, n_head: int, dropout: float = 0.0,
                  attn_type: str = 'softmax', use_time_decay_gate: bool = False,
-                 spd_dropout: float = 0.0):
+                 spd_dropout: float = 0.0, predictor: str = 'CAPS'):
         super().__init__()
         self.d_model = d_model
         self.n_head = n_head
         self.dropout_rate = dropout
         self.attn_type = attn_type
         self.use_time_decay_gate = use_time_decay_gate
+        self.predictor = predictor
 
         assert d_model % n_head == 0
         self.d_head = d_model // n_head
@@ -125,7 +126,23 @@ class CAPSAttention(nn.Module):
             x: Input tensor [B, T, D]
             use_mult_gate: True for multiplicative mode, False for additive mode
         """
+        if self.predictor == 'LinAttn':
+            return self._forward_linattn(x)
         return self._forward_add(x)
+
+    def _forward_linattn(self, x: torch.Tensor) -> torch.Tensor:
+        """Plain causal linear attention + RoPE (no gating paths)."""
+        B, T, D = x.shape
+        q = self.W_q(x).view(B, T, self.n_head, -1)
+        k = self.W_k(x).view(B, T, self.n_head, -1)
+        v = self.W_v(x).view(B, T, self.n_head, -1)
+        q, k = self.rope(q, k)
+        qk = torch.einsum('blhd,bihd->bhli', q, k)
+        qk = torch.tril(qk)
+        output = torch.einsum('bhli,bihd->blhd', qk, v)
+        output = output.reshape(B, T, -1)
+        output = self.dropout(self.c_proj(output))
+        return output
 
     def _forward_add(self, x: torch.Tensor) -> torch.Tensor:
         """Additive mode: Two Q/K pairs (p_exp only vs SPD only) combined as qk1 + qk2."""
@@ -225,7 +242,7 @@ class Transformer(nn.Module):
         n_layer = config.n_layer
         self.n_layer = n_layer
         self.predictor = config.predictor
-        self.attn = nn.ModuleList([CAPSAttention(d_model=config.n_embd, n_head=config.n_head, dropout=config.dropout, attn_type='linear') for i in range(n_layer)])
+        self.attn = nn.ModuleList([CAPSAttention(d_model=config.n_embd, n_head=config.n_head, dropout=config.dropout, attn_type='linear', predictor=config.predictor) for i in range(n_layer)])
         self.pns = nn.ModuleList([NORM(config.n_embd) for i in range(n_layer)])
         self.lns = nn.ModuleList([NORM(config.n_embd) for i in range(n_layer)])
         self.mlps = nn.ModuleList([MLP(config) for i in range(n_layer)])
@@ -288,7 +305,6 @@ class Model(nn.Module):
         self.value_token_mixer = nn.Parameter(0.02*torch.randn(self.number_of_targets, 1, self.seq_emb_dim))
 
         hidden_dim = self.d_input + self.seq_emb_dim
-        print(f'Current Dimension: {hidden_dim}')
         transformer_config = SimpleNamespace(n_layer=configs.e_layers, n_embd=hidden_dim, n_head=self.n_head, dropout=configs.dropout, 
                                              bias=False, max_len=self.seq_len+self.pred_len, predictor=configs.predictor, decay=True, enc_in=self.number_of_targets,
                                              local_attention=self.local_attention, local_attention_window=self.local_attention_window)
