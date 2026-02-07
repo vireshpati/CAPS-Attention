@@ -1,6 +1,6 @@
 # CAPS: Unifying Attention, Recurrence, and Alignment in Transformer-based Time Series Forecasting
 
-Official implementation of the paper.
+Official implementation of the paper: https://arxiv.org/pdf/2602.02729v1
 
 ## Installation
 
@@ -47,3 +47,17 @@ bash caps_baseline.sh
 ## Monitoring
 
 Metrics are logged to [Weights & Biases](https://wandb.ai). Set `WANDB_MODE=disabled` to run offline.
+
+# Citation
+
+```
+@misc{pati2026capsunifyingattentionrecurrence,
+      title={CAPS: Unifying Attention, Recurrence, and Alignment in Transformer-based Time Series Forecasting}, 
+      author={Viresh Pati and Yubin Kim and Vinh Pham and Jevon Twitty and Shihao Yang and Jiecheng Lu},
+      year={2026},
+      eprint={2602.02729},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG},
+      url={https://arxiv.org/abs/2602.02729}, 
+}
+```
